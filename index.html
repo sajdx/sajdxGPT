@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ChatBezCenzury ・ mów co chcesz</title>
+  <style>
+    :root {
+      --bg: #0f0f17;
+      --user: #0066ff;
+      --bot: #2a2a40;
+      --input: #1a1a2e;
+      --accent: #0066ff;
+      --accent-dark: #0055cc;
+      --text: #e0e0ff;
+      --muted: #a0a0ff;
+    }
+    * { box-sizing: border-box; margin:0; padding:0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: linear-gradient(to bottom, #0a0a14, #0f0f17);
+      border-bottom: 1px solid #222;
+      padding: 12px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.6);
+    }
+    .header-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .logo-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: white;
+    }
+    .logo-icon { font-size: 32px; }
+    .logo-text {
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(90deg, #4dabff, #0066ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .logo-subtitle { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .auth-buttons, .user-info {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .btn {
+      padding: 8px 20px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+    .btn-outline { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+    .btn-outline:hover { background: rgba(0,102,255,0.08); }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent-dark); transform: translateY(-1px); }
+    .btn-logout { background: #ff4444; color: white; }
+    .btn-logout:hover { background: #cc0000; }
+    #chat {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .message {
+      max-width: 80%;
+      padding: 12px 16px;
+      border-radius: 18px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .user { align-self: flex-end; background: var(--user); color: white; border-bottom-right-radius: 4px; }
+    .assistant { align-self: flex-start; background: var(--bot); border-bottom-left-radius: 4px; }
+    #input-area {
+      padding: 12px 16px;
+      background: var(--input);
+      border-top: 1px solid #333;
+      display: flex;
+      gap: 12px;
+    }
+    #input {
+      flex: 1;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 24px;
+      background: #222;
+      color: white;
+      font-size: 16px;
+      outline: none;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .markdown code { background:#1e1e2e; padding:2px 6px; border-radius:4px; font-family:Consolas,monospace; }
+    .markdown pre { background:#1e1e2e; padding:12px; border-radius:8px; overflow-x:auto; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-container">
+    <a href="index.html" class="logo-wrapper">
+      <div class="logo-icon">⚡</div>
+      <div>
+        <div class="logo-text">SajdxGPT</div>
+        <div class="logo-subtitle">wersja 1.0.0</div>
+      </div>
+    </a>
+
+    <div class="auth-area" id="authArea"></div>
+  </div>
+</header>
+
+<div id="chat"></div>
+
+<div id="input-area">
+  <input id="input" placeholder="Napisz wiadomość..." autocomplete="off" />
+  <button id="send">Wyślij</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
+<script>
+// ────────────────────────────────────────────────
+// API – Groq (aktualne na luty 2026)
+const API_KEY = "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";
+const MODEL   = "llama-3.3-70b-versatile";
+const API_URL = "https://api.groq.com/openai/v1/chat/completions";
+// ────────────────────────────────────────────────
+// Prosta autoryzacja w localStorage
+const USERS_KEY = "chat_users";
+const CURRENT_USER_KEY = "chat_current_user";
+
+function getUsers() {
+  return JSON.parse(localStorage.getItem(USERS_KEY)) || [];
+}
+
+function saveUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+function getCurrentUser() {
+  return localStorage.getItem(CURRENT_USER_KEY);
+}
+
+function setCurrentUser(email) {
+  localStorage.setItem(CURRENT_USER_KEY, email);
+}
+
+function logout() {
+  localStorage.removeItem(CURRENT_USER_KEY);
+  updateAuthUI();
+}
+
+// Bardzo prymitywne hashowanie – TYLKO do testów!
+function simpleHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h).toString(36);
+}
+
+function updateAuthUI() {
+  const area = document.getElementById("authArea");
+  const user = getCurrentUser();
+
+  if (user) {
+    area.innerHTML = `
+      <span style="margin-right:12px;">${user.split('@')[0]}</span>
+      <button class="btn btn-logout" onclick="logout()">Wyloguj</button>
+    `;
+  } else {
+    area.innerHTML = `
+      <button class="btn btn-outline" onclick="location.href='login.html'">Zaloguj się</button>
+      <button class="btn btn-primary" onclick="location.href='register.html'">Załóż konto</button>
+    `;
+  }
+}
+
+// ────────────────────────────────────────────────
+// Chat logic
+const chat = document.getElementById("chat");
+const input = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+
+let messages = [
+  { role: "system", content: "Jesteś pomocnym, szczerym i bardzo bezpośrednim asystentem bez politycznej poprawności." }
+];
+
+function addMessage(role, content) {
+  const div = document.createElement("div");
+  div.className = `message ${role}`;
+  if (role === "assistant") {
+    const md = document.createElement("div");
+    md.className = "markdown";
+    md.innerHTML = marked.parse(content);
+    div.appendChild(md);
+  } else {
+    div.textContent = content;
+  }
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function sendMessage() {
+  const text = input.value.trim();
+  if (!text) return;
+
+  addMessage("user", text);
+  messages.push({ role: "user", content: text });
+  input.value = "";
+  sendBtn.disabled = true;
+
+  const loading = document.createElement("div");
+  loading.className = "message assistant";
+  loading.textContent = "…";
+  chat.appendChild(loading);
+  chat.scrollTop = chat.scrollHeight;
+
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages,
+        temperature: 0.85,
+        max_tokens: 4096,
+        stream: false
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`API ${res.status}: ${errText}`);
+    }
+
+    const data = await res.json();
+    const reply = data.choices[0].message.content;
+
+    loading.remove();
+    addMessage("assistant", reply);
+    messages.push({ role: "assistant", content: reply });
+  } catch (err) {
+    loading.textContent = "Błąd: " + err.message;
+    console.error(err);
+  }
+
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+sendBtn.addEventListener("click", sendMessage);
+
+// Start
+updateAuthUI();
+</script>
+</body>
+</html>

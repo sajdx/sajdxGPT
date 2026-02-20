@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Załóż konto – ChatBezCenzury</title>
+  <style>
+    :root {
+      --bg: #0f0f17;
+      --accent: #0066ff;
+      --accent-dark: #0055cc;
+      --text: #e0e0ff;
+      --card: #1a1a2e;
+    }
+    body {
+      margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text);
+      min-height:100vh; display:flex; align-items:center; justify-content:center;
+    }
+    .card {
+      background:var(--card); padding:2.5rem; border-radius:16px; width:100%; max-width:420px;
+      box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid #333;
+    }
+    h1 { text-align:center; margin-bottom:1.8rem; color:#4dabff; }
+    label { display:block; margin:1.2rem 0 0.5rem; font-weight:500; }
+    input {
+      width:100%; padding:0.9rem; border:none; border-radius:8px; background:#222; color:white;
+      font-size:1rem; outline:none;
+    }
+    input:focus { outline:2px solid var(--accent); }
+    button {
+      width:100%; padding:1rem; margin-top:1.8rem; background:var(--accent); color:white;
+      border:none; border-radius:999px; font-size:1.05rem; font-weight:600; cursor:pointer;
+    }
+    button:hover { background:var(--accent-dark); }
+    .error { color:#ff7777; font-size:0.9rem; margin-top:0.6rem; min-height:1.2em; }
+    .link { text-align:center; margin-top:1.5rem; }
+    .link a { color:var(--accent); text-decoration:none; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Załóż konto</h1>
+
+  <form id="regForm">
+    <label for="email">Email</label>
+    <input type="email" id="email" required autocomplete="email">
+
+    <label for="pass">Hasło</label>
+    <input type="password" id="pass" required minlength="6">
+
+    <label for="pass2">Powtórz hasło</label>
+    <input type="password" id="pass2" required>
+
+    <div class="error" id="msg"></div>
+
+    <button type="submit">Utwórz konto</button>
+  </form>
+
+  <div class="link">
+    Masz już konto? <a href="login.html">Zaloguj się</a>
+  </div>
+</div>
+
+<script>
+const USERS_KEY = "chat_users";
+const CURRENT_USER_KEY = "chat_current_user";
+
+function getUsers() { return JSON.parse(localStorage.getItem(USERS_KEY)) || []; }
+function saveUsers(arr) { localStorage.setItem(USERS_KEY, JSON.stringify(arr)); }
+
+function simpleHash(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return Math.abs(h).toString(36);
+}
+
+document.getElementById("regForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const msg = document.getElementById("msg");
+  msg.textContent = "";
+
+  const email = document.getElementById("email").value.trim().toLowerCase();
+  const p1   = document.getElementById("pass").value;
+  const p2   = document.getElementById("pass2").value;
+
+  if (p1 !== p2)               { msg.textContent = "Hasła się różnią"; return; }
+  if (p1.length < 6)           { msg.textContent = "Hasło minimum 6 znaków"; return; }
+  if (!email.includes("@"))    { msg.textContent = "Niepoprawny email"; return; }
+
+  let users = getUsers();
+  if (users.some(u => u.email === email)) {
+    msg.textContent = "Ten email jest już zajęty";
+    return;
+  }
+
+  users.push({ email, password: simpleHash(p1) });
+  saveUsers(users);
+  localStorage.setItem(CURRENT_USER_KEY, email);
+
+  alert("Konto utworzone – zostałeś zalogowany");
+  location.href = "index.html";
+});
+</script>
+</body>
+</html>
